@@ -14,7 +14,7 @@ drop = (R(25,29)+R(56,60)+R(62,69)+[72]+R(76,94)+[96]+R(103,104)+R(111,122)
 for i in drop: W[i][4]=False
 for w in W:  # safety: any leftover né
     if re.sub(r'[^\wé]','',w[3].lower())=='né': w[4]=False
-fix={24:'Achiles',139:'degradação',161:'Farmacopeia',360:'POPs',367:'rastreabilidade,',373:'rastreabilidade',494:'gratificantes',
+fix={43:'USF',24:'Achilles',139:'degradação',161:'Farmacopeia',360:'POPs',367:'rastreabilidade,',373:'rastreabilidade',494:'gratificantes',
      1293:'móvel,',1316:'dissolutor,',1318:'Karl Fischer,',1320:'UPLC,',1358:'à',1494:'LinkedIn',787:'análises',
      685:'O',690:'foi',97:'começar',95:'Vamos',876:'Para',1107:'Você',1189:'',390:'Se',1129:'se'}
 for i,t in fix.items(): W[i][3]=t
@@ -28,6 +28,7 @@ Q={105:'1:Quando os testes contam histórias diferentes',436:'2:Monitorar o medi
    624:'3:O que encanta na estabilidade',876:'4:O que faz os recrutadores se encantarem',1107:'5:Quais instrumentos estudar'}
 for i,t in Q.items(): W[i][5]='q:'+t; assert W[i][4]
 for i in [125,128,373,521,838,938,940,994,1027,1037,1218,1352,1381,1400,1401]: W[i][5]='emph'; assert W[i][4],i
+W[1491][5]='li'
 json.dump({'segs':segs,'words':W},open('edl.json','w'),ensure_ascii=False)
 kept=[w for w in W if w[4]]
 print(len(W),len(kept))

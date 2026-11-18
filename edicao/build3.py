@@ -7,7 +7,7 @@ import json, subprocess, sys, os, bisect, numpy as np, re
 SPEED = float(os.environ.get('SPEED', 1.2)); OFPS = 30; SFPS = 16; SR = 48000
 FONT_B = '/usr/share/fonts/opentype/inter/Inter-Bold.otf'
 FONT_R = '/usr/share/fonts/opentype/inter/Inter-Medium.otf'
-NAMES = {'L': ('Rita Achiles', 'Farmacêutica · Estabilidade pós-registro'),
+NAMES = {'L': ('Rita Cássia Camille Duarte Achilles', 'Farmacêutica · Estabilidade pós-registro'),
          'R': ('Nicoly Fayffer Duarte de Oliveira', 'Apresentação')}
 TITLE = 'ESTABILIDADE PÓS-REGISTRO EM COMPRIMIDOS'
 edl = json.load(open(sys.argv[1])); out = sys.argv[2]
@@ -229,8 +229,28 @@ def compose(strip, k, fi):
         fr = bg.astype(np.uint8)
         fr[330:837, 74:1846] = 230
         fr[336:831, 80:1840] = np.asarray(im.resize((1760, 495), Image.BICUBIC))
-        fr = overlay_rgba(fr, WN if in_card[fi] else WT)
+        fr = overlay_rgba(fr, WN if (in_card[fi] or LI0 - 10 <= fi < LI1) else WT)
     if flash[fi] > 0: fr = (fr * (1 - flash[fi]) + 255 * flash[fi]).astype(np.uint8)
+    return fr
+# LinkedIn card (10s, fade in/out)
+li_t = [c2o(wpos[i][0]) for i, w in enumerate(W) if w[5] == 'li' and i in wpos]
+li0 = min(li_t[0], TOUT - 10.5) if li_t else TOUT - 10.5
+LI0, LI1 = int(li0 * OFPS), int((li0 + 10) * OFPS)
+def dli(d):
+    x, y, w, h = 1140, 60, 720, 170
+    d.rounded_rectangle([x, y, x + w, y + h], 22, fill=(255, 255, 255, 240))
+    d.rounded_rectangle([x + 25, y + 25, x + 145, y + 145], 20, fill=(10, 102, 194, 255))
+    d.text((x + 85, y + 88), 'in', font=fB(80), fill=(255, 255, 255, 255), anchor='mm')
+    d.text((x + 175, y + 32), 'Rita Duarte', font=fB(54), fill=(20, 20, 20, 255))
+    d.text((x + 177, y + 102), 'Procure no LinkedIn', font=fR(34), fill=(10, 102, 194, 255))
+LIL = text_layer(dli)
+print('linkedin card at', round(li0, 1), 's')
+_compose = compose
+def compose(strip, k, fi):
+    fr = _compose(strip, k, fi)
+    if LI0 <= fi < LI1:
+        a = min(1, (fi - LI0) / 8, (LI1 - fi) / 8)
+        L = LIL.copy(); L[..., 3] *= a; fr = overlay_rgba(fr, L)
     return fr
 # ---------- 7. frame pump + encode ----------
 class Reader:

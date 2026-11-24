@@ -142,8 +142,8 @@ ass = ['[Script Info]', 'ScriptType: v4.00+', 'PlayResX: 1920', 'PlayResY: 1080'
        '[V4+ Styles]',
        'Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding',
        'Style: Cap,Inter,68,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,5,2,2,120,120,70,1',
-       'Style: Card,Inter,40,&H0034B1F2,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,6,0,1,0,0,5,80,80,0,1',
-       'Style: CardT,Inter,88,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,4,3,5,160,160,0,1', '',
+       'Style: Card,Inter,38,&H0034B1F2,&H00FFFFFF,&H00000000,&H00000000,-1,0,0,0,100,100,8,0,1,0,0,5,80,80,0,1',
+       'Style: CardT,Inter,64,&H00FFFFFF,&H00FFFFFF,&H00000000,&H64000000,-1,0,0,0,100,100,0,0,1,4,3,8,200,200,0,1', '',
        '[Events]', 'Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text']
 YEL = '&H0034B1F2&'
 kw = [(i, W[i], wpos[i]) for i in range(len(W)) if i in wpos and clean(W[i][3])]
@@ -178,8 +178,8 @@ for ci, c in enumerate(chunks):
         ass.append(f'Dialogue: 1,{ts(ws)},{ts(we)},Cap,,0,0,0,,{pos}{" ".join(parts)}')
 for t, n, title in qcards:
     fx = r'{\fad(150,250)\fscx75\fscy75\t(0,220,\fscx100\fscy100)}'
-    ass.append(f'Dialogue: 2,{ts(t)},{ts(t + 2.5)},Card,,0,0,0,,{{\\pos(960,170)}}{{\\fad(150,250)}}PERGUNTA {n}')
-    ass.append(f'Dialogue: 2,{ts(t)},{ts(t + 2.5)},CardT,,0,0,0,,{{\\pos(960,250)}}{fx}{title.upper()}')
+    ass.append(f'Dialogue: 2,{ts(t)},{ts(t + 2.5)},Card,,0,0,0,,{{\\an5\\pos(960,112)}}{{\\fad(150,250)}}PERGUNTA {n}')
+    ass.append(f'Dialogue: 2,{ts(t)},{ts(t + 2.5)},CardT,,0,0,0,,{{\\an8\\pos(960,148)}}{fx}{title.upper()}')
 open('caps.ass', 'w').write('\n'.join(ass) + '\n')
 
 # ---------- 6. python compositor ----------
@@ -193,7 +193,7 @@ in_card = np.zeros(len(shot_of), bool); flash = np.zeros(len(shot_of))
 for t, _, _ in qcards:
     f0 = int(round(t * OFPS)); in_card[max(0, f0 - 3):f0 + int(2.6 * OFPS)] = True
     for d in range(9): 
-        if f0 + d < len(flash): flash[f0 + d] = 0.45 * (1 - d / 9)
+        pass
 lt_rng = {}
 for p in 'LR':
     for a, b, k in shots:
@@ -252,6 +252,16 @@ def compose(strip, k, fi):
         a = min(1, (fi - LI0) / 8, (LI1 - fi) / 8)
         L = LIL.copy(); L[..., 3] *= a; fr = overlay_rgba(fr, L)
     return fr
+import brand
+WIPE = 0.33
+wipes = [(0.0, 'out')] + [(t, 'both') for t, _, _ in qcards] + [(TOUT, 'in')]
+def wipe_at(fr, t):
+    for c, kind in wipes:
+        if kind in ('in', 'both') and c - WIPE <= t < c: return brand.wipe(fr, (t - (c - WIPE)) / WIPE, 'in'), True
+        if kind in ('out', 'both') and c <= t < c + WIPE: return brand.wipe(fr, (t - c) / WIPE, 'out'), True
+    return fr, False
+BUG = brand.bug_layer()
+json.dump({'tout': TOUT, 'whoosh': [c for c, _ in wipes]}, open('ep_meta.json', 'w'))
 # ---------- 7. frame pump + encode ----------
 class Reader:
     def __init__(s, k):
@@ -272,7 +282,7 @@ cmd = ['ffmpeg', '-v', 'error', '-stats', '-y', '-f', 'rawvideo', '-pix_fmt', 'r
        '-f', 's16le', '-ar', str(SR), '-ac', '1', '-i', 'cond.raw',
        '-vf', 'unsharp=5:5:0.5,subtitles=caps.ass:fontsdir=/usr/share/fonts/opentype/inter,format=yuv420p', '-af', af,
        '-t', f'{LIM:.3f}', '-c:v', 'libx264', '-preset', os.environ.get('PRESET', 'medium'),
-       '-crf', '20', '-c:a', 'aac', '-b:a', '192k', '-movflags', '+faststart', out]
+       '-crf', '17', '-c:a', 'pcm_s16le', '-movflags', '+faststart', out]
 enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 XF = 3; prev = None; prev_piece = None; blend_left = 0; blend_from = None
 for f in range(int(LIM * OFPS)):
@@ -287,6 +297,9 @@ for f in range(int(LIM * OFPS)):
     if blend_left:
         a = blend_left / (XF + 1)
         fr = (blend_from.astype(np.float32) * a + fr * (1 - a)).astype(np.uint8); blend_left -= 1
-    enc.stdin.write(fr.tobytes()); prev = fr; prev_piece = j
+    if not (LI0 <= f < LI1): fr = brand.over(fr, BUG)
+    prev = fr; prev_piece = j
+    fr, _ = wipe_at(fr, f / OFPS)
+    enc.stdin.write(fr.tobytes())
 enc.stdin.close(); enc.wait()
 for r in readers.values(): r.p.kill()
